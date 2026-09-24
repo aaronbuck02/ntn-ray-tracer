@@ -1,0 +1,118 @@
+--- a/sionna/rt/utils/ray_tracing.py
++++ b/sionna/rt/utils/ray_tracing.py
+@@ -2,6 +2,10 @@
+ # SPDX-FileCopyrightText: Copyright (c) 2021-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ # SPDX-License-Identifier: Apache-2.0
+ #
++# RICIAN_URBAN_SIM PATCH -- derived from sionna-rt 1.2.1
++# Patches applied: beamforming, epsilon_guard.  See sionna_patch/README.md.
++# Every modified hunk below is marked "[PATCH: <name>]".
++#
+ """Utilities for ray tracing"""
+ 
+ import drjit as dr
+@@ -13,6 +17,16 @@
+     theta_phi_from_unit_vec
+ from sionna.rt.utils.wedges import wedge_interior_angle
+ 
++# [PATCH: epsilon_guard] Absolute ceiling on the occlusion-ray shortening below.
++MAX_RAY_GUARD_M = 1e-3
++
++# [PATCH] Identity read by rician_urban_sim/sionna_patch_check.py.
++__RUS_PATCH__ = {
++    "base": "sionna-rt 1.2.1",
++    "patches": ("beamforming", "epsilon_guard"),
++    "rev": "2026-09-24",
++}
++
+ def fibonacci_lattice(num_points: int) -> mi.Point2f:
+     r"""
+     Generates a Fibonacci lattice of size ``num_points`` on the unit square
+@@ -33,7 +47,9 @@
+ def spawn_ray_from_sources(
+     lattice: Callable[[int], mi.Point2f],
+     samples_per_src: int,
+-    src_positions: mi.Point3f
++    src_positions: mi.Point3f,
++    src_orientations: mi.Point3f = None,   # [PATCH: beamforming]
++    beam_angle: float = None               # [PATCH: beamforming]
+ ) -> mi.Ray3f:
+     r"""
+     Spawns ``samples_per_src`` rays for each source at the positions specified
+@@ -45,19 +61,54 @@
+         the rays
+     :param samples_per_src: Number of rays per source to spawn
+     :param src_positions: Positions of the sources
++    :param src_orientations: Orientations of the sources. Defaults to None. (Used for beamforming rays)
++    :param beam_angle: Half angle of beamforming cone. Defaults to None. (Used for beamforming rays)
+     """
+ 
+     num_sources = dr.shape(src_positions)[1]
+-
+-    # Ray directions
++   
++    # Expand per-source angles to per-ray angles (samples-first ordering)
++    
++
++    # [PATCH: beamforming] Confine the ray budget to a cone about boresight.
++    # NOTE: dr.cuda.ad.Float below hardcodes the CUDA variant -- this path
++    # does not run on an LLVM/CPU Dr.Jit build.
+     samples_on_square = lattice(samples_per_src)
+-    k_world = mi.warp.square_to_uniform_sphere(samples_on_square)
+-
+-    # Samples-first ordering is used, i.e., the samples are ordered as
+-    # follows:
+-    # [source_0_samples..., source_1_samples..., ...]
+-    # Each source has its own lattice
+-    k_world = dr.tile(k_world, num_sources)
++    if src_orientations is not None:
++        if beam_angle is None:
++            # default beamforming cone half angle is 0.01 degrees
++            beam_angle = 0.01*dr.pi/180
++        
++        yaw   = dr.repeat(src_orientations.x, samples_per_src)*180/dr.pi
++        pitch = dr.repeat(src_orientations.y, samples_per_src)*180/dr.pi
++        roll = dr.repeat(src_orientations.z, samples_per_src)*180/dr.pi
++
++        # Compose rotation: R = Rz(yaw) * Ry(pitch) * Rx(roll)
++        rotation = (mi.Transform4f.rotate(mi.Vector3f(0,0,1), yaw) @
++                    mi.Transform4f.rotate(mi.Vector3f(0,1,0), pitch) @
++                    mi.Transform4f.rotate(mi.Vector3f(1,0,0), roll))
++        
++
++        # apply local rotation to get in terms of +x as boresight(was +z)
++        k_loc = mi.warp.square_to_uniform_cone(samples_on_square, dr.cuda.ad.Float(dr.cos(beam_angle)))
++        R_local = mi.Transform4f.rotate([0,1,0], 90)
++        k_loc = R_local @ k_loc
++        
++        # Samples-first ordering is used, i.e., the samples are ordered as
++        # follows:
++        # [source_0_samples..., source_1_samples..., ...]
++        # Each source has its own lattice    
++        k_world = dr.tile(k_loc, num_sources)
++        k_world = rotation @ k_world  
++    else:
++        k_world = mi.warp.square_to_uniform_sphere(samples_on_square)
++        # Samples-first ordering is used, i.e., the samples are ordered as
++        # follows:
++        # [source_0_samples..., source_1_samples..., ...]
++        # Each source has its own lattice    
++        k_world = dr.tile(k_world, num_sources)  
++        
++    
+     # Rays origins are the source locations
+     origins = dr.repeat(src_positions, samples_per_src)
+ 
+@@ -152,7 +203,11 @@
+     d = t - po
+     maxt = dr.norm(d)
+     d /= maxt
+-    maxt *= (1. - EPSILON_FLOAT)
++    # [PATCH: epsilon_guard] Sionna shortens the occlusion ray by a RELATIVE
++    # epsilon (5.96e-6 of length). Over a 550 km LEO slant that is a 10.8 m
++    # blind spot at the receiver, so blocked links report as LoS. Cap it.
++    maxt = dr.maximum(maxt - dr.minimum(maxt * EPSILON_FLOAT,
++                                        MAX_RAY_GUARD_M), 0.)
+     #
+     ray = mi.Ray3f(po, d,  maxt=maxt, time=0., wavelengths=mi.Color0f())
+     # Small optimization to avoid loop retracing due to size mismatch.

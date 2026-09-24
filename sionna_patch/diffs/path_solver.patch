@@ -1,0 +1,100 @@
+--- a/sionna/rt/path_solvers/path_solver.py
++++ b/sionna/rt/path_solvers/path_solver.py
+@@ -3,6 +3,10 @@
+ # SPDX-FileCopyrightText: Copyright (c) 2021-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ # SPDX-License-Identifier: Apache-2.0
+ #
++# RICIAN_URBAN_SIM PATCH -- derived from sionna-rt 1.2.1
++# Patches applied: beamforming.  See sionna_patch/README.md.
++# Every modified hunk below is marked "[PATCH: <name>]".
++#
+ """Paths solver: Compute propagation paths"""
+ 
+ import drjit as dr
+@@ -154,6 +158,8 @@
+                  diffraction: bool = False,
+                  edge_diffraction: bool = False,
+                  diffraction_lit_region: bool = True,
++                 beamforming: bool = False,  # [PATCH: beamforming]
++                 beam_angle: float = None,
+                  seed: int = 42) -> Paths:
+         # pylint: disable=line-too-long
+         r"""
+@@ -171,8 +177,9 @@
+         :param diffraction: Enables diffraction
+         :param edge_diffraction: Enables diffraction on free floating edges
+         :param diffraction_lit_region: Enables diffraction in the lit region
++        :param beamforming: Enables SBR beamforming, with {beam_angle} radians half angle
++        :param beam_angle: Half angle of beamforming cone(radians). Defaults to None. (Used for beamforming rays)
+         :param seed: Seed
+-
+         :return: Computed paths
+         """
+ 
+@@ -191,22 +198,42 @@
+         dr.make_opaque(src_positions, tgt_positions, src_orientations,
+                        tgt_orientations)
+ 
+-        # Generate candidates
+-        paths_buffer = self._candidate_generator(
+-            mi_scene=scene.mi_scene,
+-            src_positions=src_positions,
+-            tgt_positions=tgt_positions,
+-            samples_per_src=samples_per_src,
+-            max_num_paths_per_src=max_num_paths_per_src,
+-            max_depth=max_depth,
+-            los=los,
+-            specular_reflection=specular_reflection,
+-            diffuse_reflection=diffuse_reflection,
+-            refraction=refraction,
+-            diffraction=diffraction,
+-            edge_diffraction=edge_diffraction,
+-            seed=seed
+-        )
++        # [PATCH: beamforming] Route to the cone-sampling candidate generator.
++        if beamforming:
++            paths_buffer = self._candidate_generator(
++                mi_scene=scene.mi_scene,
++                src_positions=src_positions,
++                tgt_positions=tgt_positions,
++                samples_per_src=samples_per_src,
++                max_num_paths_per_src=max_num_paths_per_src,
++                max_depth=max_depth,
++                los=los,
++                specular_reflection=specular_reflection,
++                diffuse_reflection=diffuse_reflection,
++                refraction=refraction,
++                diffraction=diffraction,
++                edge_diffraction=edge_diffraction,
++                seed=seed,
++                src_orientations=src_orientations,
++                beam_angle=beam_angle
++            )
++        else:
++            paths_buffer = self._candidate_generator(
++                mi_scene=scene.mi_scene,
++                src_positions=src_positions,
++                tgt_positions=tgt_positions,
++                samples_per_src=samples_per_src,
++                max_num_paths_per_src=max_num_paths_per_src,
++                max_depth=max_depth,
++                los=los,
++                specular_reflection=specular_reflection,
++                diffuse_reflection=diffuse_reflection,
++                refraction=refraction,
++                diffraction=diffraction,
++                edge_diffraction=edge_diffraction,
++                seed=seed
++            )
++            
+ 
+         paths_buffer.schedule()
+         dr.eval()
+@@ -233,6 +260,7 @@
+             wavelength=scene.wavelength,
+             paths=paths_buffer,
+             samples_per_src=samples_per_src,
++            beam_angle=beam_angle,
+             diffraction=diffraction,
+             src_positions=src_positions,
+             tgt_positions=tgt_positions,

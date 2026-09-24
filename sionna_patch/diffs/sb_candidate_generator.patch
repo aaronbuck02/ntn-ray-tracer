@@ -1,0 +1,106 @@
+--- a/sionna/rt/path_solvers/sb_candidate_generator.py
++++ b/sionna/rt/path_solvers/sb_candidate_generator.py
+@@ -2,6 +2,10 @@
+ # SPDX-FileCopyrightText: Copyright (c) 2021-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ # SPDX-License-Identifier: Apache-2.0
+ #
++# RICIAN_URBAN_SIM PATCH -- derived from sionna-rt 1.2.1
++# Patches applied: beamforming.  See sionna_patch/README.md.
++# Every modified hunk below is marked "[PATCH: <name>]".
++#
+ """Generator of paths candidates using shooting and bouncing of rays"""
+ 
+ import mitsuba as mi
+@@ -80,7 +84,9 @@
+                  refraction: bool,
+                  diffraction: bool,
+                  edge_diffraction: bool,
+-                 seed: int = 1) -> PathsBuffer:
++                 seed: int = 1,
++                 src_orientations: mi.Point3f = None,
++                 beam_angle: float = None) -> PathsBuffer:  # [PATCH: beamforming]
+         # pylint: disable=line-too-long
+         r"""
+         Instantiates the paths buffer and runs the candidate generator
+@@ -98,6 +104,8 @@
+         :param diffraction: If set to `True`, then the diffracted paths are computed
+         :param edge_diffraction: If set to `True`, then the diffraction on free floating edges is computed
+         :param seed: Seed for the sampler. Defaults to 1.
++        :param src_orientations: Orientations of the sources. Defaults to None. (Used for beamforming rays)
++        :param beam_angle: Half angle of beamforming cone. Defaults to None. (Used for beamforming rays)
+ 
+         :return: Candidate paths
+         """
+@@ -133,7 +141,7 @@
+                     paths, samples_per_src, max_num_paths_per_src, max_depth,
+                     paths_counter_per_source, specular_reflection,
+                     diffuse_reflection, refraction, diffraction,
+-                    edge_diffraction)
++                    edge_diffraction, src_orientations, beam_angle)
+ 
+         return paths
+ 
+@@ -206,7 +214,9 @@
+                           diffuse_reflection: bool,
+                           refraction: bool,
+                           diffraction: bool,
+-                          edge_diffraction: bool):
++                          edge_diffraction: bool,
++                          src_orientations: mi.Point3f = None,
++                          beam_angle: float = None):  # [PATCH: beamforming]
+         # pylint: disable=line-too-long
+         r"""
+         Executes shooting-and-bouncing of rays
+@@ -226,6 +236,8 @@
+         :param refraction: If set to `True`, then the refracted paths are computed
+         :param diffraction: If set to `True`, then the diffracted paths are computed
+         :param edge_diffraction: If set to `True`, then the diffraction on free floating edges is computed
++        :param src_orientations: Orientations of the sources. Defaults to None. (Used for beamforming rays)
++        :param beam_angle: Half angle of beamforming cone. Defaults to None. (Used for beamforming rays)
+         """
+ 
+         # Runs the shooting-and-bouncing of rays loop
+@@ -233,7 +245,7 @@
+             self._shoot_and_bounce_loop(mi_scene, src_positions, tgt_positions,
+                 samples_per_src, max_num_paths_per_src, max_depth, paths,
+                 paths_counter_per_source, specular_reflection, diffuse_reflection,
+-                refraction, diffraction, edge_diffraction, self._sampler)
++                refraction, diffraction, edge_diffraction, self._sampler, src_orientations, beam_angle)
+ 
+     @dr.syntax
+     def _shoot_and_bounce_loop(self,
+@@ -250,7 +262,10 @@
+                                refraction_enabled: bool,
+                                diffraction_enabled: bool,
+                                edge_diffraction_enabled: bool,
+-                               sampler: mi.Sampler):
++                               sampler: mi.Sampler,
++                               src_orientations: mi.Point3f = None,
++                               beam_angle: float = None
++                               ):
+         # pylint: disable=line-too-long
+         r"""
+         Executes shooting-and-bouncing of rays
+@@ -271,6 +286,8 @@
+         :param diffraction_enabled: If set to `True`, then the diffracted paths are computed
+         :param edge_diffraction_enabled: If set to `True`, then the diffraction on free floating edges is computed
+         :param sampler: Sampler used to generate pseudo-random numbers
++        :param src_orientations: Orientations of the sources. Defaults to None. (Used for beamforming rays)
++        :param beam_angle: Half angle of beamforming cone. Defaults to None. (Used for beamforming rays)
+         """
+ 
+         num_sources = dr.shape(src_positions)[1]
+@@ -282,7 +299,12 @@
+                                   diffraction_enabled)
+ 
+         # Rays
+-        ray = spawn_ray_from_sources(fibonacci_lattice, samples_per_src,
++        # [PATCH: beamforming] Cone sampling when orientations are supplied.
++        if src_orientations is not None:
++            ray = spawn_ray_from_sources(fibonacci_lattice, samples_per_src,
++                                     src_positions, src_orientations, beam_angle)
++        else:
++            ray = spawn_ray_from_sources(fibonacci_lattice, samples_per_src,
+                                      src_positions)
+ 
+         # Store direction of departure

@@ -1,0 +1,72 @@
+--- a/sionna/rt/path_solvers/field_calculator.py
++++ b/sionna/rt/path_solvers/field_calculator.py
+@@ -2,8 +2,13 @@
+ # SPDX-FileCopyrightText: Copyright (c) 2021-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ # SPDX-License-Identifier: Apache-2.0
+ #
++# RICIAN_URBAN_SIM PATCH -- derived from sionna-rt 1.2.1
++# Patches applied: beamforming.  See sionna_patch/README.md.
++# Every modified hunk below is marked "[PATCH: <name>]".
++#
+ """Computes the paths channel coefficients and delays"""
+ 
++import math  # [PATCH: beamforming]
+ import mitsuba as mi
+ import drjit as dr
+ from typing import Callable, Tuple, List
+@@ -50,6 +55,7 @@
+                  wavelength: mi.Float | float,
+                  paths: PathsBuffer,
+                  samples_per_src: int,
++                 beam_angle: float | None,
+                  diffraction: bool,
+                  src_positions: mi.Point3f,
+                  tgt_positions: mi.Point3f,
+@@ -83,7 +89,7 @@
+ 
+         # Compute the channel impulse response
+         with dr.scoped_set_flag(dr.JitFlag.OptimizeLoops, False):
+-            self._compute_cir(wavelength, paths, samples_per_src,
++            self._compute_cir(wavelength, paths, samples_per_src, beam_angle,
+                               diffraction,
+                               src_positions, tgt_positions, src_orientations,
+                               tgt_orientations, src_antenna_patterns,
+@@ -119,6 +125,7 @@
+                      wavelength: mi.Float | float,
+                      paths: PathsBuffer,
+                      samples_per_src: int,
++                     beam_angle: float | None,
+                      diffraction_enabled: bool,
+                      src_positions: mi.Point3f,
+                      tgt_positions: mi.Point3f,
+@@ -203,9 +210,9 @@
+ 
+         # Solid angle of the ray tube.
+         # It is required to compute the diffusely reflected field.
+-        # Initialized assuming that all the rays initially spawn from the source
+-        # share the unit sphere equally, i.e., initialized to
+-        # 4*PI/samples_per_src.
++        # When beamforming is enabled, rays are launched over the beam cone
++        # rather than the full sphere, so the initial ray-tube solid angle
++        # must use the cone solid angle to preserve total transmit power.
+         # This quantity is also used to account for the fact that paths
+         # including a diffuse reflection are sampled during shoot-and-bounce
+         # with a probability defined by the radio material, and that this
+@@ -213,8 +220,15 @@
+         # arises from this sampling.
+         # This canceling is implemented by scaling the solid-angle by the
+         # inverse square-root of the probability of sampling the path.
+-        solid_angle = dr.full(mi.Float, 4.*dr.pi*dr.rcp(samples_per_src),
+-                              num_paths)
++        # [PATCH: beamforming] Ray-tube solid angle must follow the cone,
++        # not the full sphere, or total transmit power is wrong.
++        if beam_angle is None:
++            initial_solid_angle = 4. * math.pi / samples_per_src
++        else:
++            cone_solid_angle = 2. * math.pi * (1. - math.cos(float(beam_angle)))
++            initial_solid_angle = cone_solid_angle / samples_per_src
++         
++        solid_angle = dr.full(mi.Float, initial_solid_angle, num_paths)
+ 
+         # Length of the ray tube.
+         # Note that this is different from the length of the path, as every
