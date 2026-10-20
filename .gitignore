@@ -1,0 +1,35 @@
+# The working tree is ~24 GB of generated simulation output (36k .ply meshes,
+# 700 .pkl checkpoints). Ignore everything, then whitelist the source.
+*
+
+# Recurse into directories so the whitelist below can match inside them.
+!*/
+
+# Source
+!.gitignore
+!*.py
+!*.ipynb
+!*.md
+!*.sh
+
+# Run configurations (small, and they define every reported result)
+!sim_config*.json
+!sweep_config*.json
+
+# Never, regardless of the rules above
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+*.pkl
+*.ply
+*.png
+*.jpg
+*.pdf
+*.csv
+*.npz
+*.npy
+
+# Generated scene trees and downloaded caches
+ppp_scenes/
+tle_catalog/
+ionex_cache/

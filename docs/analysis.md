@@ -208,3 +208,48 @@ scored, so they cannot inflate an agreement count.
 
 Acceptance criteria per run live in
 [`../validation/METHODS.md`](../validation/METHODS.md).
+
+---
+
+## Scene classification — `scene_dataset.py`, `scene_classify.py`
+
+Consumes the sweeps of [pipelines.md](pipelines.md#scene-classification-sweeps--srccustom_driversscene_class_datasetipynb);
+driven by `src/analysis/scene_classification.ipynb`, which writes CSVs to
+`Results/scene_class/analysis/`. Design and dataset schema:
+[scene_classification.md](scene_classification.md).
+
+**Distillation.** `scene_dataset.load_links` joins every per-UE results row to
+its scene's labels and draws (from the variant's `scenes_manifest.pkl`, by scene
+seed). `scene_features` then distils each (scene, elevation, carrier) over its
+UEs: P_LoS, ratio-of-means K over the LoS UEs, and mean / std / q10 / q50 / q90
+of each LSP by state. `excess_loss_dB` is −PG_dB minus the free-space loss at
+the scene's slant range, so elevation and orbit do not masquerade as clutter.
+
+**Leakage rules.** Each column has a role (`feature`, `context`, `label`,
+`nuisance`, `oracle`, `id`); only `feature` and `context` (elevation, carrier,
+polarization pair) feed a model. `SF_dB` is oracle: it is a residual about its
+results file's mean, and each file holds one class. Folds are grouped by scene
+seed (`StratifiedGroupKFold`), because one scene appears at every elevation and
+carrier; the shuffled-label control permutes labels per scene, not per row.
+
+**Scene bootstrap.** CIs on ensemble statistics resample whole scenes
+(`sensitivity.scene_bootstrap`). UEs in one scene share buildings, so
+resampling UEs treats correlated draws as independent and understates the
+interval by roughly the square root of the design effect.
+
+**K estimators.** `estimator_table` puts four side by side: mean of per-UE dB
+(what `uK`/`sigK` are scored with), median of dB, ratio of means
+(`K_rom_dB`), and `K_fit_dB`. The last is Greenstein's moment estimator
+K = s/(G − s), s = √(G² − Var|H|²), G = E|H|², over |H(f)| on `K_FIT_N` points
+across `K_FIT_BW_HZ` (default 100 MHz). It is a frequency-domain fit, so it only
+sees fading resolvable within that band: when DS·B ≪ 1 the envelope barely
+varies and K_fit → ∞ (reported as `K_fit_inf_frac`). It is the closest
+available analogue of a measured Rician fit without spatial snapshots. The
+sensitivity sweeps turn it off (`K_FIT_N = 0`, NaN): it was undefined for most UEs
+and dominated their run time.
+
+**Distance to 38.811.** `dist_metrics` gives the KS statistic and the 1-Wasserstein
+distance of the per-UE K (dB) and log-spreads against the tabulated normal
+N(μ, σ) of the nearest 38.811 elevation and the band from
+`band_for_frequency`. W1 is in the LSP's own units (dB, or decades for lg*),
+so it reads as an average quantile error.

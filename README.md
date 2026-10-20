@@ -1,5 +1,4 @@
 # NTN channel modeling with Sionna RT
-Extended Sionna RT-based implementation that enables NTN RT simulations. Configured for local GPU utilization, but should be portable to wide variety of configurations.
 
 Ray-traced LEO satellite non-terrestrial-network channels, distilled into
 3GPP TR 38.811-style large-scale parameters.
@@ -32,43 +31,22 @@ if either patch is missing. A CUDA Dr.Jit backend is required — the beamformin
 cone path is CUDA-only. See [docs/sionna-patches.md](docs/sionna-patches.md).
 
 Modules import as `Ray_Tracing.src.*`, so the **parent** of this repository must
-be on `sys.path`, and this repository's directory name must be `Ray_Tracing`.
-Clone with an explicit target name:
-
-```bash
-git clone <url> Ray_Tracing
-```
-
-Entry-point scripts add the parent to `sys.path` themselves; for interactive
+be on `sys.path`. Entry-point scripts arrange that themselves; for interactive
 use, run from the parent directory or add it to `PYTHONPATH`.
 
 ## Running
-
-The command-line runners in `src/simulations/` are the production entry
-points. Two notebooks next to them, [src/site_simulation.ipynb](src/site_simulation.ipynb)
-and [src/stochastic_simulation.ipynb](src/stochastic_simulation.ipynb), run
-exactly the same pipeline interactively and are the recommended way to iterate
-on scene setup and per-elevation configuration before launching a full sweep
-from the CLI.
-
-| Notebook | Corresponds to |
-|---|---|
-| [src/site_simulation.ipynb](src/site_simulation.ipynb) | `run_elevation_sim.py` — fixed-scene elevation sweep |
-| [src/stochastic_simulation.ipynb](src/stochastic_simulation.ipynb) | `run_stochastic_sim.py` — PPP-ensemble sweep |
 
 ### Fixed scene, swept over elevation
 
 ```bash
 CUDA_VISIBLE_DEVICES=0 python src/simulations/run_elevation_sim.py \
     --elevation 30 --gpu_id 0 \
-    --config path/to/sim_config.json \
-    --rx_file path/to/rx_positions.pkl \
+    --config src/simulation_configs/sim_config.json \
+    --rx_file src/simulation_configs/rx_positions.pkl \
     --output ./Results/my_run
 ```
 
-`--config`, `--rx_file` and `--output` are required (bring your own — a config
-JSON and a receiver-positions pickle in the schema described below).
-One process per elevation,
+`--config`, `--rx_file` and `--output` are required. One process per elevation,
 one GPU each; `CUDA_VISIBLE_DEVICES` must be set before the process starts so
 Dr.Jit takes full control of the device. `--resume` / `--no-resume` control
 checkpoint reuse.
@@ -85,7 +63,7 @@ python src/utils/scene_gen_ppp.py --out ./ppp_scenes --size 500 500 \
 
 CUDA_VISIBLE_DEVICES=0 python src/simulations/run_stochastic_sim.py \
     --elevation 30 --gpu_id 0 \
-    --config path/to/sim_config.json \
+    --config src/simulation_configs/sim_config.json \
     --scenes_manifest ppp_scenes/scenes_manifest.pkl \
     --output ./Results/my_ensemble
 ```
@@ -96,6 +74,9 @@ statistics pairable across elevations. See
 [docs/pipelines.md](docs/pipelines.md).
 
 ### Real satellite passes
+
+For a fixed-UE Canary Wharf sweep selecting real TLE passes near 30°/60°/90° peaks, full-pass RX
+SNR and 10° elevation-bin threshold percentages, see [docs/pass-snr.md](docs/pass-snr.md).
 
 ```bash
 python src/utils/fetch_tle.py                       # cache the TLE catalog
@@ -110,6 +91,7 @@ model is enabled.
 
 ```bash
 python -m Ray_Tracing.src.utils.validate_3gpp
+python -m Ray_Tracing.src.diagnostics.test_cp_smoke
 python -m Ray_Tracing.src.sionna_patch_check --selftest
 ```
 
@@ -121,7 +103,9 @@ python -m Ray_Tracing.src.sionna_patch_check --selftest
 | [docs/physics.md](docs/physics.md) | orbital geometry and frames, ionosphere, troposphere, polarization |
 | [docs/analysis.md](docs/analysis.md) | LSP distillation, clustering, the TR 38.811 reference parser and its traps |
 | [docs/sionna-patches.md](docs/sionna-patches.md) | the occlusion-guard defect, ray-cone beamforming, ITU range widening |
+| [docs/scene_classification.md](docs/scene_classification.md) | the NTN scene-classification dataset: classes, per-scene draws, launcher, dataset schema, analysis |
 | [sionna_patch/README.md](sionna_patch/README.md) | patch archive layout and re-apply procedure |
+| [validation/METHODS.md](validation/METHODS.md) | validation procedures and acceptance criteria |
 
 ## Modules
 
@@ -137,15 +121,29 @@ placement). Distillation: `lsp_stats.py`, `cluster_stats.py`, `cluster_id.py`.
 Reference and scoring: `ns3_reference.py` (TR 38.811 tables parsed from ns-3
 source), `validate_3gpp.py`. Inputs: `fetch_tle.py`, `fetch_vtec.py`,
 `generate_pass_waypoints.py`. Infrastructure: `checkpoint_utils.py`,
-`itu_range_patch.py`.
+`itu_range_patch.py`. Scene-classification sweeps: `scene_classes.py` (class
+medians, per-scene draws, calibration gate), `variant_manifest.py` (streamed
+scene manifests, LHS draws, ITU material anchors), `orbit_sampling.py`
+(per-scene real-TLE passes), `sweep_utils.py` (multi-GPU launcher),
+`scene_dataset.py` (per-link and per-scene LSP tables), `scene_classify.py`
+(scene-grouped classifiers), `sensitivity.py` (results loaders, scene bootstrap,
+38.811 distances).
 
-**`src/`** — `sionna_patch_check.py` (verifies the patched Sionna is loaded),
-`site_simulation.ipynb` and `stochastic_simulation.ipynb` (the driver
-notebooks — see the section above).
+**`src/`** — `sionna_patch_check.py` (verifies the patched Sionna is loaded);
+`custom_drivers/scene_class_dataset.ipynb` drives the dataset sweeps and
+`analysis/scene_classification.ipynb` analyses them (see
+[docs/scene_classification.md](docs/scene_classification.md)).
+**`src/diagnostics/`** — `test_cp_smoke.py` (the executable check for the
+polarization patterns).
+
+Also in this repository, outside the general pipeline and not documented here:
+`src/scenario_generation/` (builders for specific measured scenes),
+`src/ns3_integration/` (ns-3 export), `chiu_validation/` (validation against an
+analytical reference model), and `matlab_ntn_rt/` (a MATLAB port).
 
 ## Configuration
 
-One JSON per campaign, passed via `--config`. The keys that matter:
+One JSON per campaign under `src/simulation_configs/`. The keys that matter:
 
 | Key | Example | Note |
 |---|---|---|

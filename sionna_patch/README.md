@@ -1,8 +1,8 @@
 # Sionna RT patches
 
-Two patches to `sionna-rt 1.2.1` that this project depends on. **These are
+Three patches to `sionna-rt 1.2.1` that this project depends on. **These are
 reference copies — nothing here installs itself.** If the venv is rebuilt or
-`sionna-rt` is reinstalled, both patches are silently lost and the simulations
+`sionna-rt` is reinstalled, all three patches are silently lost and the simulations
 produce wrong results without erroring. `sionna_patch_check.py` exists to catch
 exactly that; every runner calls it before solving.
 
@@ -18,15 +18,27 @@ Four files cooperate:
 
 | File | Change |
 |---|---|
-| `rt/utils/ray_tracing.py` | `spawn_ray_from_sources` gains `src_orientations` / `beam_angle`; samples `mi.warp.square_to_uniform_cone` and rotates boresight from +z to +x |
+| `rt/utils/ray_tracing.py` | `spawn_ray_from_sources` gains `src_orientations` / `beam_angle`; samples the cone (`square_to_uniform_cone_t`, see `beam_cone_precision`) and rotates boresight from +z to +x |
 | `rt/path_solvers/path_solver.py` | `beamforming` / `beam_angle` kwargs on `__call__`; routes to the cone generator, forwards `beam_angle` |
 | `rt/path_solvers/sb_candidate_generator.py` | threads both through the shoot-and-bounce chain |
-| `rt/path_solvers/field_calculator.py` | initial ray-tube solid angle becomes `2*pi*(1-cos(beam_angle))/samples_per_src` instead of `4*pi/samples_per_src`, preserving total transmit power |
+| `rt/path_solvers/field_calculator.py` | initial ray-tube solid angle becomes `2*pi*beam_cone_t_max(beam_angle)/samples_per_src` (= `2*pi*(1-cos)`) instead of `4*pi/samples_per_src`, preserving total transmit power |
 
-**Known limitation:** `ray_tracing.py` hardcodes `dr.cuda.ad.Float` in the cone
-call, so this path requires a CUDA Dr.Jit variant. On a CPU/LLVM build the patch
-is present but broken — `sionna_patch_check.py` reports CUDA availability for
-this reason.
+### `beam_cone_precision`
+
+The cone width was passed to Mitsuba as `cos(beam_angle)` in float32, which
+rounds to 1 at LEO ranges. At slant/scene-radius > 4096 the cone collapsed onto
+the scene centre; between ~1360 and 4096 it had the wrong width while the solid
+angle assumed the right one, which biased diffuse power by up to about ±2.4 dB.
+`beam_cone_t_max` forms 1 − cos as 2 sin²(ψ/2), and `square_to_uniform_cone_t`
+is Mitsuba's concentric-disk cone mapping fed that exact value. The field
+calculator uses the same `beam_cone_t_max` for the solid angle. This also
+removed the old `dr.cuda.ad.Float` hardcode. Details and verification:
+`docs/sionna-patches.md`.
+
+| File | Change |
+|---|---|
+| `rt/utils/ray_tracing.py` | adds `beam_cone_t_max`, `square_to_uniform_cone_t`; `spawn_ray_from_sources` uses them |
+| `rt/path_solvers/field_calculator.py` | solid angle from `beam_cone_t_max` |
 
 ### `epsilon_guard`
 

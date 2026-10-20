@@ -3,12 +3,13 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # RICIAN_URBAN_SIM PATCH -- derived from sionna-rt 1.2.1
-# Patches applied: beamforming.  See sionna_patch/README.md.
+# Patches applied: beamforming, beam_cone_precision.  See sionna_patch/README.md.
 # Every modified hunk below is marked "[PATCH: <name>]".
 #
 """Computes the paths channel coefficients and delays"""
 
 import math  # [PATCH: beamforming]
+from sionna.rt.utils.ray_tracing import beam_cone_t_max  # [PATCH: beam_cone_precision]
 import mitsuba as mi
 import drjit as dr
 from typing import Callable, Tuple, List
@@ -225,7 +226,8 @@ class FieldCalculator:
         if beam_angle is None:
             initial_solid_angle = 4. * math.pi / samples_per_src
         else:
-            cone_solid_angle = 2. * math.pi * (1. - math.cos(float(beam_angle)))
+            # [PATCH: beam_cone_precision] same exact 1 - cos the sampler uses.
+            cone_solid_angle = 2. * math.pi * beam_cone_t_max(beam_angle)
             initial_solid_angle = cone_solid_angle / samples_per_src
          
         solid_angle = dr.full(mi.Float, initial_solid_angle, num_paths)

@@ -150,10 +150,73 @@ K-factor exactly where the model is most stressed.
 The four files and their roles are tabulated in
 [`../sionna_patch/README.md`](../sionna_patch/README.md).
 
-**Known limitation:** `ray_tracing.py` hardcodes `dr.cuda.ad.Float` in the cone
-call, so the path requires a CUDA Dr.Jit variant. On an LLVM/CPU build the patch
-is present but broken, which introspection alone cannot detect — this is why
-`sionna_patch_check` reports CUDA availability separately.
+The original cone call hardcoded `dr.cuda.ad.Float`. `beam_cone_precision`
+(below) replaced that call, so the sampler is no longer CUDA-only. The pipeline is
+still validated on CUDA only.
+
+---
+
+## `beam_cone_precision` — exact cone width at long slant ranges
+
+### The defect
+
+The `beamforming` patch sampled the cone with
+`mi.warp.square_to_uniform_cone(samples, cos(psi))`, with `cos(psi)` evaluated in
+float32. A beam sized to a few-hundred-metre scene from LEO is ψ ≈ 1e-4 rad, so
+cos ψ = 1 − ψ²/2 lies within one float32 step (5.96e-8) of 1. Mitsuba's first
+operation is `1 - cos_cutoff`, and that difference was lost to rounding:
+
+| slant / scene radius | float32 cos ψ | effect |
+|---|---|---|
+| < ~1360 | several steps below 1 | cone correct to within a few % |
+| ~1360 – 4096 | snapped to the nearest step | cone the wrong size, e.g. 464 m instead of 354 m at 1345 km |
+| > 4096 (2¹²) | exactly 1.0 | **cone collapses**: every ray hits the scene centre |
+
+The field calculator meanwhile computed the solid angle in float64 from the true
+ψ. In the middle regime, ray weights and actual coverage disagree, and diffuse
+power is biased by 10·log₁₀(ψ²/ψ_eff²). The bias is positive when the cone snaps
+narrow and negative when it snaps wide. The model predicts the measured bias per
+scene to within ~0.05 dB.
+
+Measured on the Phase 0 sensitivity run of 2026-10-13 (500 m PPP scenes, real
+Starlink passes):
+- **10°:** 88% of scenes collapsed. Per-UE mean K was 38 dB instead of ~6 dB, and
+  64% of LoS UEs had no ground-interacting power.
+- **20–80°:** diffuse power biased by −2.4 to +1.75 dB per scene. Only 0–63% of
+  scenes per elevation were within ±0.2 dB.
+- **Older runs:** sieg at a fixed 500 km (slant/radius 2169) carries about
+  −0.5 dB of diffuse bias.
+
+### The fix
+
+Never form cos ψ. `beam_cone_t_max(psi)` returns 1 − cos ψ as 2 sin²(ψ/2), which
+float32 holds to full relative precision. `square_to_uniform_cone_t(sample, t_max)`
+is Mitsuba's own concentric-disk cone mapping with that value substituted for
+`1 - cos_cutoff`. On the GPU, Mitsuba's mapping matches this formula
+bit-for-bit, so the lattice stratification is unchanged:
+
+```
+p = square_to_uniform_disk_concentric(sample);  t = t_max * |p|^2
+direction = ( p * sqrt(t_max * (2 - t)),  1 - t )        # +z boresight, then rotated to +x
+```
+
+The field calculator's solid angle becomes `2*pi*beam_cone_t_max(psi)`, the same
+number the sampler uses.
+
+### Verification (2026-10-14)
+
+- **Coverage:** at slant/radius 500 to 10,000, rays fill the scene disc with exactly
+  25.0% inside R/2 and a maximum radius of R. Nothing collapses.
+- **Regression where the old cone was fine** (slant/radius 707): per-UE NLoS power
+  changes by a median 0.03 dB, against 0.14 dB between solver seeds.
+- **Collapsed 10° scenes:** mean K 40.8 → 5.6 dB; missing-ground fraction 0.64 → 0.
+- **Energy:** doubling ψ changes ensemble NLoS power by −0.02 dB (seed noise
+  0.01 dB), although only a quarter of the paths reach the scene.
+
+`sionna_patch_check` gates on this patch. It requires `beam_cone_precision` in
+`__RUS_PATCH__` and a `beam_cone_t_max` accurate to 1e-6 at slant/radius 5000, and
+rejects a sampler that still calls `square_to_uniform_cone`. Its manifest
+comparison also works again: `ARCHIVE` had pointed at `src/sionna_patch/`.
 
 ---
 
@@ -172,3 +235,22 @@ validated band: 1.1× at 11 GHz, 2× at 20 GHz. Building facades and roofs are
 unaffected — concrete and metal are characterised to 100 GHz — so the
 extrapolation bears on the ground-reflected contribution specifically. It is
 not archived under `sionna_patch/` because it changes no Sionna source.
+
+---
+
+## Known upstream defect — receive-pattern direction (not yet patched)
+
+In `rt/path_solvers/field_calculator.py::_compute_cir`, 1.2.1 updates
+`ki_world = dr.select(active, ko_world, ki_world)` *after* `active` has been
+cleared on a path's last interaction, so `ki_world` is never advanced to the
+final segment. The receive pattern is then evaluated at `-ki_world`: the
+reversed **incidence direction onto the last interaction**, not the arrival
+direction at the RX. sionna-rt 2.1.0 has the two lines in the other order.
+
+For a satellite every first segment is parallel to the LoS, so under 1.2.1
+each single-bounce NLoS path gets the LoS direction's pattern gain. Measured on
+a PPP smoke scene (2 GHz, 45°, RHCP): a zenith-pointing `tr38901` UE gives
+mean K 11.5 dB with the defect and 27.8 dB with the reorder (ground-path power
+−21 dB). `iso` patterns, CP and linear, are unchanged to ≤3e-5 relative, so
+existing iso-antenna results stand. The fix is the one-line reorder; it is not
+in the archive yet, and `sionna_patch_check` does not test for it.

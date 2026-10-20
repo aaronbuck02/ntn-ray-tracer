@@ -49,6 +49,18 @@ spans 1932 km at 10° down to 600 km at zenith — a 10.2 dB swing in free-space
 loss that a fixed slant range omits entirely. Setting `SWEEP_ALTITUDE_KM` makes
 a sweep use the true per-elevation range instead of `SLANT_DIST_M`.
 
+### Sampled real passes — `orbit_sampling.py`
+
+The sensitivity sweeps use no synthetic orbit. Each scene gets an area-uniform
+ground point (|lat| ≤ 60°), and each (scene, elevation E) a peak elevation drawn
+from U[max(30°, E + 1°), 90°] and a leg drawn from {rising, setting}. The real
+Starlink pass nearest that peak is taken from the cached catalog
+(`pass_snr.make_real_target_passes`), and the SGP4 state is solved at the exact
+instant el = E. Azimuth, slant range and velocity therefore come from real
+orbital shells (350–550 km, 43–97.6° inclination). The scene's street-grid
+heading (`SCENE_EAST_HEADING_DEG`, U[0, 90)) rotates that azimuth into the scene
+frame. See [scene_classification.md § 2.2](scene_classification.md#22-satellite-pass--real-tles-at-a-sampled-peak-elevation).
+
 ---
 
 ## Ionosphere — `ionospheric_utils.py`
@@ -57,7 +69,10 @@ ITU-R P.531-15. **Off by default** — the shipped configs set
 `IONOSPHERE_ENABLED=false`, so nothing here runs unless that is turned on. It is
 disabled for the TR 38.811 cross-validation because the standard carries
 ionospheric loss as a separate additive link-budget term; enabling it inside the
-ray tracer and then comparing against the tables would double-count.
+ray tracer and then comparing against the tables would double-count. The
+scene-classification sweeps turn it (and the troposphere) on at fixed means
+([scene_classification.md § 2.6](scene_classification.md#26-link-nuisances-class-blind));
+there the draws are seeded per scene, not per run.
 
 TEC is time-varying, so Faraday rotation Ω_F is a random variable. Per batch:
 

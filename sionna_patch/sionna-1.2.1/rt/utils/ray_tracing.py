@@ -3,11 +3,13 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # RICIAN_URBAN_SIM PATCH -- derived from sionna-rt 1.2.1
-# Patches applied: beamforming, epsilon_guard.  See sionna_patch/README.md.
+# Patches applied: beamforming, epsilon_guard, beam_cone_precision.
+# See sionna_patch/README.md.
 # Every modified hunk below is marked "[PATCH: <name>]".
 #
 """Utilities for ray tracing"""
 
+import math  # [PATCH: beam_cone_precision]
 import drjit as dr
 import mitsuba as mi
 from typing import Callable
@@ -23,9 +25,32 @@ MAX_RAY_GUARD_M = 1e-3
 # [PATCH] Identity read by rician_urban_sim/sionna_patch_check.py.
 __RUS_PATCH__ = {
     "base": "sionna-rt 1.2.1",
-    "patches": ("beamforming", "epsilon_guard"),
-    "rev": "2026-09-24",
+    "patches": ("beamforming", "epsilon_guard", "beam_cone_precision"),
+    "rev": "2026-10-14",
 }
+
+
+# [PATCH: beam_cone_precision] 1 - cos(beam_angle), formed without the "1 -".
+# A LEO beam sized to a few-hundred-metre scene is ~1e-4 rad, so cos() sits
+# within one float32 step of 1: at slant/radius > 4096 it rounds to exactly 1
+# (the cone collapses onto boresight), and above ~1360 it snaps to the wrong
+# width. 2 sin^2(x/2) is the same quantity with full relative precision. The
+# field calculator uses this same value for the ray-tube solid angle, so ray
+# weights always match the cone actually sampled.
+def beam_cone_t_max(beam_angle: float) -> float:
+    return 2.0 * math.sin(0.5 * float(beam_angle)) ** 2
+
+
+# [PATCH: beam_cone_precision] mi.warp.square_to_uniform_cone with the cone
+# given as t_max = 1 - cos(theta_max) instead of cos(theta_max). The math is
+# Mitsuba's own concentric-disk mapping (bit-identical when t_max is exact),
+# so the lattice stratification is unchanged; only the lossy input is gone.
+def square_to_uniform_cone_t(sample: mi.Point2f, t_max: float) -> mi.Vector3f:
+    p = mi.warp.square_to_uniform_disk_concentric(sample)
+    pn = dr.squared_norm(p)
+    t = mi.Float(t_max) * pn                       # 1 - cos(theta), exact for small theta
+    p = p * dr.safe_sqrt(mi.Float(t_max) * (2. - t))
+    return mi.Vector3f(p.x, p.y, 1. - t)
 
 def fibonacci_lattice(num_points: int) -> mi.Point2f:
     r"""
@@ -71,8 +96,6 @@ def spawn_ray_from_sources(
     
 
     # [PATCH: beamforming] Confine the ray budget to a cone about boresight.
-    # NOTE: dr.cuda.ad.Float below hardcodes the CUDA variant -- this path
-    # does not run on an LLVM/CPU Dr.Jit build.
     samples_on_square = lattice(samples_per_src)
     if src_orientations is not None:
         if beam_angle is None:
@@ -90,7 +113,9 @@ def spawn_ray_from_sources(
         
 
         # apply local rotation to get in terms of +x as boresight(was +z)
-        k_loc = mi.warp.square_to_uniform_cone(samples_on_square, dr.cuda.ad.Float(dr.cos(beam_angle)))
+        # [PATCH: beam_cone_precision] was square_to_uniform_cone(samples,
+        # dr.cuda.ad.Float(dr.cos(beam_angle))): float32 cos collapses the cone.
+        k_loc = square_to_uniform_cone_t(samples_on_square, beam_cone_t_max(beam_angle))
         R_local = mi.Transform4f.rotate([0,1,0], 90)
         k_loc = R_local @ k_loc
         

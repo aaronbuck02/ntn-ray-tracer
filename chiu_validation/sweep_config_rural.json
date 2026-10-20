@@ -1,0 +1,100 @@
+{
+  "SCENE_XML": null,
+  "FREQUENCY": 2000000000.0,
+  "TX_POWER_DBM": 43.0,
+  "SLANT_DIST_M": null,
+  "SWEEP_ALTITUDE_KM": 550.0,
+  "SCENE_CENTER": [
+    0.0,
+    0.0
+  ],
+  "TX_AZIMUTH_DEG": 181.0,
+  "RX_HEIGHT": 1.5,
+  "SCENE_RADIUS": 2000.0,
+  "SCATTERING_COEFF": 0.0,
+  "ETA_R": 5.24,
+  "SIGMA": 0.0462,
+  "MATERIAL_NAMES": [
+    "itu_brick",
+    "itu_concrete",
+    "itu_plasterboard"
+  ],
+  "MATERIAL_PARAMS": {
+    "itu_concrete": {
+      "a": 5.24,
+      "b": 0.0,
+      "c": 0.0462,
+      "d": 0.7822,
+      "scattering_coefficient": 0.0,
+      "xpd_coefficient": 0.0,
+      "thickness": 2.0
+    },
+    "itu_brick": {
+      "a": 5.24,
+      "b": 0.0,
+      "c": 0.0462,
+      "d": 0.7822,
+      "scattering_coefficient": 0.0,
+      "xpd_coefficient": 0.0,
+      "thickness": 2.0
+    },
+    "itu_plasterboard": {
+      "a": 3.5,
+      "b": 0.0,
+      "c": 0.05,
+      "d": 0.0,
+      "scattering_coefficient": 0.0,
+      "xpd_coefficient": 0.0,
+      "thickness": 2.0
+    }
+  },
+  "MAX_DEPTH": 1,
+  "LOS": true,
+  "SPECULAR_REFLECTION": true,
+  "DIFFUSE_REFLECTION": false,
+  "DIFFRACTION": true,
+  "EDGE_DIFFRACTION": false,
+  "REFRACTION": false,
+  "BEAMFORMING": true,
+  "BASE_SAMPLES_PER_SRC": 10000000,
+  "BASE_MAX_PATHS": 10000000,
+  "TX_POL_TYPE": "V",
+  "RX_POL_TYPE": "V",
+  "POL_BASE_PATTERN": "iso",
+  "N_RX_PER_SCENE": 1,
+  "PPP_RX_AT_ORIGIN": true,
+  "SAVE_PATH_VERTICES": true,
+  "RAW_SAVE_INTERVAL": 1,
+  "GROUND_RETRY_MAX": 4,
+  "GROUND_RETRY_JITTER_M": 0.05,
+  "RNG_SEED": 42,
+  "CHECKPOINT_INTERVAL": 200,
+  "RESUME_FROM_CHECKPOINT": false,
+  "IONOSPHERE_ENABLED": false,
+  "ATMOSPHERE_ENABLED": false,
+  "DOPPLER_ENABLED": false,
+  "SCENARIO": "rural",
+  "R_CITY": 2000.0,
+  "WALL_THICK": 0.3,
+  "PPP_BASE_SEED": 0,
+  "N_SCENES": 2000,
+  "ELEVATION_ANGLES": [
+    10,
+    20,
+    30,
+    40,
+    50,
+    60,
+    70,
+    80
+  ],
+  "POLARIZATIONS": [
+    "V",
+    "H"
+  ],
+  "POLARIZATION_MODE": "cp_total",
+  "WALL_MAT": "itu_concrete",
+  "ROOF_MAT": "itu_brick",
+  "GROUND_MAT": "itu_plasterboard",
+  "VERIFY_EVERY": 0
+}

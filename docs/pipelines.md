@@ -156,3 +156,105 @@ Results directories are named per run — `results_sieg_2GHz`,
 `results_wharf_du_20GHz`, `chiu_validation/results_urban_cp` and so on — not
 collected under a single `results/`.
 
+
+New sensitivity keys, all absent from older files: `n_paths`, `P_by_depth`
+(incoherent power of paths with exactly d interactions, d = 0..`MAX_DEPTH`;
+sums to `P_los + P_nlos`), `P_ground`/`P_wall`/`P_roof` (power of paths touching
+that surface role at **any** depth, from `paths.objects` and the PPP mesh names;
+not additive, zero for site scenes), `K_fit_dB` (moment-method Rician K over
+|H(f)|, below) and `rx_height`. Checkpoints that pre-date them resume with NaN
+padding.
+
+---
+
+## Scene-classification sweeps — `src/custom_drivers/scene_class_dataset.ipynb`
+
+Drives `run_stochastic_sim.py` over a grid of **variants** × elevations, one
+process per free GPU (`sweep_utils.queue_entries` → `start_detached`, tmux
+session `scene_class`). Finished (variant, elevation) pairs are skipped and
+interrupted ones resume from their checkpoint. The design (classes, per-scene
+draws, datasets) is in [scene_classification.md](scene_classification.md);
+analysis is in `src/analysis/scene_classification.ipynb`
+([analysis.md](analysis.md#scene-classification--scene_datasetpy-scene_classifypy)).
+
+A variant is a dict; the dataset driver uses one per (dataset, carrier, class),
+each pointing at that class's manifest (`scene_classes.class_manifest`):
+
+```python
+{"name": "2GHz__urban", "elevations": [10, 20, 30, 40, 50, 60, 70, 80],
+ "cfg_overrides": {"FREQUENCY": 2e9},                        # any run-wide key
+ "manifest": "Results/scene_class/base/_manifests/urban.pkl"}
+# or "material_overrides": {...} / "lhs": {"factors": {...}} / "oat": {...}
+```
+
+Each writes `Results/scene_class/<dataset>/<name>/` holding `config.json`,
+`scenes_manifest.pkl`, `variant.json` and the usual per-elevation files.
+
+**Streaming manifests.** `variant_manifest.virtual_manifest` writes a manifest
+with `streaming=True` whose entries describe scenes instead of pointing to files:
+
+```python
+{"seed": 17, "sample_kwargs": {...},            # per-scene sampler draws (alpha, cell_res, gamma)
+ "cfg_overrides": {"SCENE_EAST_HEADING_DEG": 42.0, ...},
+ "ground_params": {...},                        # optional per-scene role params
+ "orbit": {10.0: waypoint, 30.0: waypoint, ...},  # per-elevation real-TLE state
+ "ground_station": (lat, lon)}
+```
+
+For such entries `run_stochastic_sim.py` calls `generate_scene_streaming` into
+`<output>/scratch_elevNNN/scene_<seed>/`, solves and deletes it, so no geometry
+is cached and the notebook kernel never touches Mitsuba. The same (seed, kwargs)
+always gives the same scene, so every variant sees the same scenes and UEs as the
+baseline. Manifests with `xml_path` entries still work as before.
+
+**Per-scene TX.** When every entry has an `orbit` waypoint for the run's
+elevation, the TX position, beam half-angle and velocity are computed per scene
+(`tx_position_from_pass_sample` with that scene's `SCENE_EAST_HEADING_DEG`)
+instead of once per run, and `DOPPLER_ENABLED` is honoured without
+`--waypoints_file`. Waypoints come from `orbit_sampling.build_orbit_table`
+([scene_classification.md § 2.2](scene_classification.md#22-satellite-pass--real-tles-at-a-sampled-peak-elevation)).
+
+**Material override keys**, per role (`wall`, `roof`, `ground`) or `all`:
+`base` swaps in an ITU-R P.2040 anchor's (a, b, c, d) from
+`variant_manifest.MATERIAL_ANCHORS` and is applied first; `eps_scale`,
+`sigma_scale` multiply P.2040 `a`/`c` (so the frequency law is kept); `scattering_coefficient`, `xpd_coefficient`, `thickness`,
+`scattering_pattern` (`directive`|`lambertian`|`backscattering`), `alpha_r`,
+`alpha_i`, `lambda_` are set absolutely.
+
+**Slab thickness.** The PPP role defaults carry `thickness = 2.0` m. Sionna's
+0.1 m default slab adds a thin-film term that moves reflection loss by several
+dB depending on ε_r — it would contaminate every ε_r/σ sensitivity. Manifests
+from before this default lack the key; `variant_manifest` injects it.
+
+**Common random numbers.** With `SOLVER_SEED_OFFSET` set, the solver seed is a
+pure function of (`RNG_SEED`, scene seed, elevation, offset). Variants sharing
+an offset see the same ray sample: an identity variant reproduces the baseline
+to ~1e-5 relative (float32 reduction order on the GPU), with identical path
+sets. Replicates differ only in the offset; their spread is the solver noise
+floor. Unset, the legacy per-run RNG stream is used unchanged.
+
+**Per-scene overrides** (`lhs` variants). A manifest entry may carry its own
+`wall/roof/ground_params` and `cfg_overrides`; the runner applies them to a
+per-scene copy of the config. Only keys read per scene may vary:
+`RX_HEIGHT`, `SCATTERING_COEFF`, `RX_ORIENTATION_DEG`, `RX_PITCH_DEG`,
+`RX_YAW_DEG`, `RX_BASE_PATTERN`, `POL_BASE_PATTERN`, `TX_POL_TYPE`,
+`RX_POL_TYPE`, `SCENE_EAST_HEADING_DEG`; anything else raises.
+`variant_manifest.lhs_manifest` layers one Latin-hypercube draw per scene on top
+of the entry's existing draws (`oat_uniform_manifest` is the one-factor case).
+Factor names route by prefix: `<role>.` / `all.` (material), `cfg.` (config),
+`geo.` (scene sampler; `geo.beta` becomes `cell_res`, streaming manifests only).
+Specs are `(lo, hi)` for U[lo, hi], `(lo, hi, "int")` for discrete-uniform,
+`(lo, hi, "log")` for log-uniform, or `(choices, weights, "cat")` for a weighted
+categorical (`weights=None` is uniform; the design column holds the choice
+index). `cfg.POL_PAIR` takes `"TX/RX"` choices and sets both polarization keys;
+`<role>.base` takes anchor names. The design matrices are concatenated in the
+manifest's `design`.
+
+**Link keys** read by `build_scene_batch`: `RX_BASE_PATTERN` (UE element,
+default `POL_BASE_PATTERN`; also honoured for linear polarization) and
+`RX_ORIENTATION_DEG` (yaw, pitch, roll; pitch −90° turns the array boresight to
+zenith). Non-iso UE patterns are only meaningful with the receive-pattern fix
+described in [sionna-patches.md](sionna-patches.md): stock Sionna 1.2.1 evaluates
+the RX pattern at the last interaction's incidence direction, so every NLoS path
+inherits the LoS gain (iso patterns are unaffected to 3e-5). The satellite element pattern is not swept: from 350–550 km the scene
+subtends ~0.05°, so it is a constant gain that cannot change K or spreads.
