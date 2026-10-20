@@ -84,7 +84,7 @@ def split_by_interaction_type(taus, amps, inter_all_depths, freq,
     """
     a    = np.asarray(amps, dtype=complex)
     t    = np.asarray(taus, dtype=float)
-    ph   = np.exp(-1j * 2 * np.pi * freq * t)
+    ph   = None if incoherent else np.exp(-1j * 2 * np.pi * freq * t)   # only the coherent sums use it
     iall = np.asarray(inter_all_depths, dtype=int)   # [max_depth, n_paths]
 
     n_paths = len(a)

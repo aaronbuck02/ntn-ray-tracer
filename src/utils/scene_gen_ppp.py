@@ -521,35 +521,24 @@ def write_sionna_scene(
     write_ply(os.path.join(mesh_dir, "ground.ply"), gv, gf, binary=binary_ply)
     shapes.append(("ground", "meshes/ground.ply", ground_material))
 
-    # ---- buildings (walls+bottom and roof are separate meshes/materials) --
+    # ---- buildings: walls, bottom and roof in ONE closed mesh per building ----
+    # Sionna diffracts only at edges shared by two faces of the same mesh, so a
+    # roof in its own mesh leaves the roof edges as open borders that never
+    # diffract. The roof cap is the walls' top vertices 4-7 (both primitives
+    # list 4 bottom then 4 top corners, CCW), with the building material:
+    # roof_material no longer reaches the buildings.
+    meshes = [(wv, np.r_[wf, [[4, 5, 6], [4, 6, 7]]])
+              for wv, wf, _, _ in (_primitive_meshes(spec, b) for b in range(spec.n_buildings))]
     if one_ply_per_building:
-        for b in range(spec.n_buildings):
-            wv, wf, rv, rf = _primitive_meshes(spec, b)
-            wfn = f"building_{b:05d}_walls.ply"
-            rfn = f"building_{b:05d}_roof.ply"
-            write_ply(os.path.join(mesh_dir, wfn), wv, wf, binary=binary_ply)
-            write_ply(os.path.join(mesh_dir, rfn), rv, rf, binary=binary_ply)
-            shapes.append((f"building_{b:05d}_walls", f"meshes/{wfn}",
-                           building_material))
-            shapes.append((f"building_{b:05d}_roof", f"meshes/{rfn}",
-                           roof_material))
-    else:
-        WV, WF, woff = [], [], 0
-        RV, RF, roff = [], [], 0
-        for b in range(spec.n_buildings):
-            wv, wf, rv, rf = _primitive_meshes(spec, b)
-            WV.append(wv); WF.append(wf + woff); woff += len(wv)
-            RV.append(rv); RF.append(rf + roff); roff += len(rv)
-        if WV:
-            write_ply(os.path.join(mesh_dir, "building_walls.ply"),
-                      np.vstack(WV), np.vstack(WF), binary=binary_ply)
-            shapes.append(("building_walls", "meshes/building_walls.ply",
-                           building_material))
-        if RV:
-            write_ply(os.path.join(mesh_dir, "building_roofs.ply"),
-                      np.vstack(RV), np.vstack(RF), binary=binary_ply)
-            shapes.append(("building_roofs", "meshes/building_roofs.ply",
-                           roof_material))
+        for b, (bv, bf) in enumerate(meshes):
+            fn = f"building_{b:05d}.ply"
+            write_ply(os.path.join(mesh_dir, fn), bv, bf, binary=binary_ply)
+            shapes.append((f"building_{b:05d}", f"meshes/{fn}", building_material))
+    elif meshes:
+        off = np.cumsum([0] + [len(bv) for bv, _ in meshes[:-1]])
+        write_ply(os.path.join(mesh_dir, "buildings.ply"), np.vstack([bv for bv, _ in meshes]),
+                  np.vstack([bf + o for (_, bf), o in zip(meshes, off)]), binary=binary_ply)
+        shapes.append(("buildings", "meshes/buildings.ply", building_material))
 
     # ---- xml ---------------------------------------------------------------
     mats = sorted({ground_material, building_material, roof_material})
@@ -850,6 +839,34 @@ generated scene.
     )
 
 
+def inside_footprints(xy: np.ndarray, spec: SceneSpec, clearance: float = 0.0) -> np.ndarray:
+    """[N] True where a point lies inside a footprint grown by ``clearance`` (same square rule as free_space_grid)."""
+    xy = np.asarray(xy, float)[:, :2]
+    h = spec.sides / 2.0 + clearance
+    return np.any((np.abs(xy[:, None, 0] - spec.centers[None, :, 0]) <= h) &
+                  (np.abs(xy[:, None, 1] - spec.centers[None, :, 1]) <= h), axis=1)
+
+
+def sample_street_positions(spec: SceneSpec, n: int, rx_height: float, rng: np.random.Generator,
+                            grid_res: float = 2.0, margin: float = 20.0, clearance: float = 0.5) -> np.ndarray:
+    """[n, 3] UE positions uniform over the street at least ``clearance`` from every footprint.
+
+    Same draw as free_space_grid + sample_rx_positions (a random grid cell, then a uniform shift within it), but the
+    stand-off is enforced on the final position: cells are kept if their square can reach the allowed area, and a
+    point that lands inside a footprint or closer than ``clearance`` is drawn again. (Applying the stand-off to the
+    cell centres only let the +-grid_res/2 shift carry UEs up to grid_res/2 - clearance into buildings.)
+    square footprints only, as free_space_grid.
+    """
+    free, _ = free_space_grid(spec, grid_res=grid_res, margin=margin, clearance=clearance - grid_res / 2.0)
+    pos = np.empty((n, 2))
+    todo = np.arange(n)
+    while len(todo):
+        p = free[rng.choice(len(free), size=len(todo))] + rng.uniform(-grid_res / 2, grid_res / 2, (len(todo), 2))
+        pos[todo] = p
+        todo = todo[inside_footprints(p, spec, clearance)]
+    return np.column_stack([pos, np.full(n, rx_height)])
+
+
 def free_space_grid(spec: SceneSpec, grid_res: float = 2.0,
                     margin: float = 20.0, clearance: float = 0.0):
     """
@@ -866,10 +883,14 @@ def free_space_grid(spec: SceneSpec, grid_res: float = 2.0,
     XX, YY = np.meshgrid(xs, ys)
     xf, yf = XX.ravel(), YY.ravel()
 
-    occ = np.zeros(xf.shape, dtype=bool)
+    occ = np.zeros(XX.shape, dtype=bool)
     for (cx, cy), s in zip(spec.centers, spec.sides):
         h = s / 2.0 + clearance
-        occ |= (np.abs(xf - cx) <= h) & (np.abs(yf - cy) <= h)
+        # same test as on the full grid, applied only to the cells within one grid step of the footprint
+        i0, i1 = np.searchsorted(xs, [cx - h - grid_res, cx + h + grid_res])
+        j0, j1 = np.searchsorted(ys, [cy - h - grid_res, cy + h + grid_res])
+        occ[j0:j1, i0:i1] |= (np.abs(ys[j0:j1, None] - cy) <= h) & (np.abs(xs[None, i0:i1] - cx) <= h)
+    occ = occ.ravel()
 
     in_zone = ((xf >= xmin + margin) & (xf <= xmax - margin) &
                (yf >= ymin + margin) & (yf <= ymax - margin))

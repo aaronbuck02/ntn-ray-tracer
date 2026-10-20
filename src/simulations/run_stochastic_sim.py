@@ -21,6 +21,9 @@ import gc
 import pickle
 import shutil
 
+# numpy dot on 1e5-path arrays: 64 BLAS threads ran ~30x slower than 1 (must precede the numpy import)
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+
 parser = argparse.ArgumentParser(description="Stochastic PPP-scene NTN sim — single elevation angle")
 parser.add_argument("--elevation", type=float, default=None,
                     help="Elevation angle [degrees]. Used directly (with the legacy "
@@ -98,7 +101,7 @@ from Ray_Tracing.src.utils.channel_utils  import (rms_delay_spread, rms_angular_
                               power_by_depth, object_roles, power_by_role,
                               rician_k_moment_fit)
 # Patched fork of scene_utils (scattering pattern, UE pattern/orientation); see its docstring.
-from Ray_Tracing.src.utils.scene_utils_sensitivity import (build_scene_batch, sample_rx_positions,
+from Ray_Tracing.src.utils.scene_utils_sensitivity import (build_scene_batch,
                                                             sample_rx_trajectories)
 from Ray_Tracing.src.utils.orbital_utils  import slant_range_m
 import Ray_Tracing.src.utils.scene_gen_ppp as sg
@@ -829,12 +832,14 @@ def _extract_ue(rxd, w, sc, want_raw):
         doppler_mean_hz_td, doppler_rms_hz_td = 0.0, 0.0
 
     if len(t_v) > 0:
-        pwr         = split_by_interaction_type(t_v, a_v, inter_all_v, FREQUENCY,
-                                                 incoherent=False)
         pwr_inc     = split_by_interaction_type(t_v, a_v, inter_all_v, FREQUENCY,
                                                  incoherent=True)
+        # The coherent split and h_total only feed the raw sample's rows; P_los,
+        # P_nlos and has_los are incoherent in either mode.
+        pwr         = (split_by_interaction_type(t_v, a_v, inter_all_v, FREQUENCY,
+                                                 incoherent=False) if want_raw else pwr_inc)
         _, ds        = rms_delay_spread(t_v, a_v)
-        h_total      = complex_channel(t_v, a_v, FREQUENCY)
+        h_total      = complex_channel(t_v, a_v, FREQUENCY) if want_raw else 0j
         P_los        = pwr["P_los"]
         P_nlos       = pwr["P_nlos"]
         has_los_flag = pwr["has_los"]
@@ -1037,8 +1042,11 @@ for scene_idx, entry in enumerate(scene_entries[start_scene:], start=start_scene
             # makes per-UE statistics pairable across the sweep; seeding off the run RNG
             # would silently resample them per angle and destroy the pairing.
             _rx_rng = np.random.default_rng(RNG_SEED + 7919 * int(entry["seed"]))
-            pos = sample_rx_positions(_free_xy, m["n_draw"], _rx_h,
-                                      rng=_rx_rng, grid_res=RX_GRID_RES).tolist()[:m["n_ue"]]
+            # Stand-off enforced on the final position, so no UE lands inside or
+            # within RX_CLEARANCE of a building (the grid-cell test let the
+            # +-RX_GRID_RES/2 shift carry ~0.5 % of UEs into buildings).
+            pos = sg.sample_street_positions(_spec, m["n_draw"], _rx_h, _rx_rng, grid_res=RX_GRID_RES,
+                                             margin=RX_MARGIN, clearance=RX_CLEARANCE).tolist()[:m["n_ue"]]
             vel = [[0.0, 0.0, 0.0]] * len(pos)
             um = [dict(ue_id=k, traj_t_s=0.0, ue_speed_mps=0.0, ue_heading_deg=np.nan)
                   for k in range(len(pos))]
@@ -1100,6 +1108,14 @@ for scene_idx, entry in enumerate(scene_entries[start_scene:], start=start_scene
             chunk = (j - i + 1) // 2
             chunk_ok = chunk
             print(f"    OOM solving {j - i} receivers; retrying in chunks of {chunk}")
+            sys.stdout.flush()
+            continue
+        if cand.get("n", 0) >= cand.get("cap", 1) and j - i > 1:
+            # Candidate buffer full: paths were dropped. Redo this chunk at half the size (kept for later chunks).
+            del res
+            _free_gpu()
+            chunk = chunk_ok = (j - i + 1) // 2
+            print(f"    candidate cap hit solving {j - i} receivers; retrying in chunks of {chunk}")
             sys.stdout.flush()
             continue
         per_rx[i:j] = res
