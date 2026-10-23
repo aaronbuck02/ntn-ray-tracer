@@ -173,3 +173,11 @@ the schema is in [docs/pipelines.md](docs/pipelines.md).
 Results also carry a `sionna_patch` provenance record, so a file produced
 without the patches is identifiable afterwards. **Patched and unpatched results
 are not comparable.**
+
+## License
+
+Apache License 2.0, the same license as Sionna RT; see [LICENSE](LICENSE).
+The bundled Sionna RT 1.2.1 sources (`sionna_patch/sionna-1.2.1/` and, on the
+`sionna-ntn-3gpp` branch, `ntn_3gpp/site/sionna/`) are Copyright (c) 2021-2025
+NVIDIA CORPORATION & AFFILIATES and are modified by the patches in
+`sionna_patch/diffs/`.
