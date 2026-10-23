@@ -1,0 +1,7 @@
+sionna-rt==1.2.1
+mitsuba==3.7.1
+drjit==1.2.0
+numpy==2.4.3
+scipy==1.17.1
+sgp4==2.25
+matplotlib==3.10.8

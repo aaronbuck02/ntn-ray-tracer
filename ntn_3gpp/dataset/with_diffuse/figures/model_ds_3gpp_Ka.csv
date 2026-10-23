@@ -1,0 +1,65 @@
+scenario,version,state,elevation_deg,mu_lgDS,sigma_lgDS,n_ue,n_zero_ds,n_cities
+urban,all paths,LoS,10,-7.9666,0.8235,5252,0,50000
+urban,all paths,NLoS,10,-7.9359,1.0087,29283,12157,50000
+urban,40 dB floor,LoS,10,-8.0613,0.9352,5252,0,50000
+urban,40 dB floor,NLoS,10,-7.8829,1.0019,27941,13499,50000
+urban,all paths,LoS,20,-8.1355,0.6378,16881,0,50000
+urban,all paths,NLoS,20,-7.9373,0.9369,22311,8537,50000
+urban,40 dB floor,LoS,20,-8.2088,0.697,16881,0,50000
+urban,40 dB floor,NLoS,20,-7.9246,0.9483,21408,9440,50000
+urban,all paths,LoS,30,-8.2934,0.501,25112,0,50000
+urban,all paths,NLoS,30,-7.9486,0.9062,17259,6073,50000
+urban,40 dB floor,LoS,30,-8.3315,0.5228,25112,0,50000
+urban,40 dB floor,NLoS,30,-7.9545,0.936,16539,6793,50000
+urban,all paths,LoS,40,-8.3939,0.3679,31079,0,50000
+urban,all paths,NLoS,40,-7.934,0.8663,13736,4178,50000
+urban,40 dB floor,LoS,40,-8.4405,0.3902,31079,0,50000
+urban,40 dB floor,NLoS,40,-7.9424,0.9021,13195,4719,50000
+urban,all paths,LoS,50,-8.4472,0.2449,35765,0,50000
+urban,all paths,NLoS,50,-7.9411,0.8339,10794,2853,50000
+urban,40 dB floor,LoS,50,-8.4972,0.2624,35765,0,50000
+urban,40 dB floor,NLoS,50,-7.9386,0.8536,10354,3293,50000
+urban,all paths,LoS,60,-8.4705,0.1382,39775,0,50000
+urban,all paths,NLoS,60,-7.9586,0.7765,8110,1814,50000
+urban,40 dB floor,LoS,60,-8.516,0.1479,39775,0,50000
+urban,40 dB floor,NLoS,60,-7.9526,0.7936,7778,2146,50000
+urban,all paths,LoS,70,-8.4763,0.0533,43226,0,50000
+urban,all paths,NLoS,70,-8.0526,0.7248,5599,1061,50000
+urban,40 dB floor,LoS,70,-8.5069,0.0537,43226,0,50000
+urban,40 dB floor,NLoS,70,-8.0251,0.7034,5320,1340,50000
+urban,all paths,LoS,80,-8.4691,0.0235,46643,0,50000
+urban,all paths,NLoS,80,-8.258,0.6411,2902,443,50000
+urban,40 dB floor,LoS,80,-8.5185,0.0185,46643,0,50000
+urban,40 dB floor,NLoS,80,-8.2196,0.5796,2714,631,50000
+rural,all paths,LoS,10,-8.6242,0.4351,112373,0,150000
+rural,all paths,NLoS,10,-7.4843,0.6738,25965,10160,150000
+rural,40 dB floor,LoS,10,-8.9841,0.5817,112373,0,150000
+rural,40 dB floor,NLoS,10,-7.5096,0.6564,24284,11841,150000
+rural,all paths,LoS,20,-8.691,0.2063,130565,0,150000
+rural,all paths,NLoS,20,-7.5848,0.654,13380,5179,150000
+rural,40 dB floor,LoS,20,-8.8165,0.2283,130565,0,150000
+rural,40 dB floor,NLoS,20,-7.6041,0.65,12228,6331,150000
+rural,all paths,LoS,30,-8.6264,0.1036,137511,0,150000
+rural,all paths,NLoS,30,-7.6236,0.6361,8751,3192,150000
+rural,40 dB floor,LoS,30,-8.6652,0.1018,137511,0,150000
+rural,40 dB floor,NLoS,30,-7.6344,0.62,7919,4024,150000
+rural,all paths,LoS,40,-8.5529,0.0525,141251,0,150000
+rural,all paths,NLoS,40,-7.6583,0.608,6343,2086,150000
+rural,40 dB floor,LoS,40,-8.6079,0.051,141251,0,150000
+rural,40 dB floor,NLoS,40,-7.6685,0.6014,5782,2647,150000
+rural,all paths,LoS,50,-8.4907,0.0282,143735,0,150000
+rural,all paths,NLoS,50,-7.7296,0.5984,4725,1369,150000
+rural,40 dB floor,LoS,50,-8.5498,0.0226,143735,0,150000
+rural,40 dB floor,NLoS,50,-7.7265,0.5911,4238,1856,150000
+rural,all paths,LoS,60,-8.4429,0.0195,145702,0,150000
+rural,all paths,NLoS,60,-7.8032,0.5647,3345,864,150000
+rural,40 dB floor,LoS,60,-8.4951,0.0086,145702,0,150000
+rural,40 dB floor,NLoS,60,-7.8055,0.5681,2978,1231,150000
+rural,all paths,LoS,70,-8.4093,0.0178,147283,0,150000
+rural,all paths,NLoS,70,-7.924,0.5406,2181,497,150000
+rural,40 dB floor,LoS,70,-8.4449,0.0049,147283,0,150000
+rural,40 dB floor,NLoS,70,-7.9239,0.5422,1912,766,150000
+rural,all paths,LoS,80,-8.389,0.0181,148662,0,150000
+rural,all paths,NLoS,80,-8.1508,0.5041,1119,212,150000
+rural,40 dB floor,LoS,80,-8.445,0.0056,148662,0,150000
+rural,40 dB floor,NLoS,80,-8.1911,0.5435,881,450,150000

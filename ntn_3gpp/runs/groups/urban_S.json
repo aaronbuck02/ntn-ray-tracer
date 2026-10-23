@@ -1,0 +1,16 @@
+{
+  "members": [
+    {
+      "name": "urban_S_V",
+      "dir": "@ROOT@/urban_S_V",
+      "config": "@ROOT@/urban_S_V/config.json",
+      "manifest": "@ROOT@/urban_S_V/manifest.pkl"
+    },
+    {
+      "name": "urban_S_H",
+      "dir": "@ROOT@/urban_S_H",
+      "config": "@ROOT@/urban_S_H/config.json",
+      "manifest": "@ROOT@/urban_S_H/manifest.pkl"
+    }
+  ]
+}

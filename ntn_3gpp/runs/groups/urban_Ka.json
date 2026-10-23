@@ -1,0 +1,10 @@
+{
+  "members": [
+    {
+      "name": "urban_Ka",
+      "dir": "@ROOT@/urban_Ka",
+      "config": "@ROOT@/urban_Ka/config.json",
+      "manifest": "@ROOT@/urban_Ka/manifest.pkl"
+    }
+  ]
+}

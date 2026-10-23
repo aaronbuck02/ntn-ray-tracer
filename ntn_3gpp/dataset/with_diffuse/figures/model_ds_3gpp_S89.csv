@@ -1,0 +1,9 @@
+scenario,version,state,elevation_deg,mu_lgDS,sigma_lgDS,n_ue,n_zero_ds,n_cities
+urban,all paths,LoS,89,-8.3977,0.0728,99321,0,100000
+urban,all paths,NLoS,89,-8.5676,0.6113,621,57,100000
+urban,40 dB floor,LoS,89,-8.4474,0.0303,99321,0,100000
+urban,40 dB floor,NLoS,89,-8.461,0.3679,571,107,100000
+rural,all paths,LoS,89,-8.2691,0.0845,299759,0,300000
+rural,all paths,NLoS,89,-8.1924,0.2938,211,30,300000
+rural,40 dB floor,LoS,89,-8.363,0.0118,299759,0,300000
+rural,40 dB floor,NLoS,89,-8.3349,0.2886,195,46,300000

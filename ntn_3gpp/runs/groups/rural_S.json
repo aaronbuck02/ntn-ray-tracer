@@ -1,0 +1,16 @@
+{
+  "members": [
+    {
+      "name": "rural_S_V",
+      "dir": "@ROOT@/rural_S_V",
+      "config": "@ROOT@/rural_S_V/config.json",
+      "manifest": "@ROOT@/rural_S_V/manifest.pkl"
+    },
+    {
+      "name": "rural_S_H",
+      "dir": "@ROOT@/rural_S_H",
+      "config": "@ROOT@/rural_S_H/config.json",
+      "manifest": "@ROOT@/rural_S_H/manifest.pkl"
+    }
+  ]
+}

@@ -13,6 +13,45 @@ scene  ──►  RT solve  ──►  per-path CIR  ──►  LSP distillation
              (Sionna)      channel_utils      lsp_stats            validate_3gpp
 ```
 
+## Relation to IEEE SA P1944
+
+This code and dataset support the NTN channel modeling subgroup of
+IEEE SA P1944 (Standard for Channel Model for Wireless Systems).
+- Project page: https://standards.ieee.org/ieee/1944/11261/
+- FunLab P1944 page: https://wp.ece.uw.edu/funlab/sa-p1944/
+
+## Branch `sionna-ntn-3gpp`: ray-traced update of the TR 38.811 tables
+
+This branch is `sionna-ntn-dev` plus `ntn_3gpp/`: the ray-tracing campaign that
+re-derives the TR 38.811 channel tables (K-factor, delay spread, angle spreads,
+clutter loss, shadow fading, cluster count) and fills the gaps 6G needs (Ku band,
+K at a directional UE antenna, Doppler spread from satellite motion).
+
+| Path | What it is |
+|---|---|
+| `ntn_3gpp/sim/`, `ntn_3gpp/run.sh`, `ntn_3gpp/runs/` | the runner, its launcher, and the exact run inputs (configs and scene lists) |
+| `ntn_3gpp/Ray_Tracing/`, `ntn_3gpp/site/` | the repo modules (as of 2026-10-14) and the patched Sionna RT 1.2.1 the runs used; the folder is self-contained |
+| `ntn_3gpp/post/` | post-processing and plots: per-UE K and delay spread (3GPP definition), the summary table, K at the UE panel against the TR 38.811 generator, the comparison with the geometry-stochastic model |
+| `ntn_3gpp/dataset/` | the processed dataset (below) |
+| `ntn_3gpp/README.md` | how to run, check and collect a campaign |
+
+**Campaign:** urban and rural scenes from ITU-R P.1410 statistics, 10 scenes x
+1000 UEs, S 2 GHz / Ku 12 GHz / Ka 20 GHz, elevation 10-90 deg, satellite at
+600 km; Sionna RT with up to 3 bounces, edge diffraction and diffuse scattering,
+plus a second run with diffuse scattering off.
+
+**Dataset**
+- **In git, processed (5 MB):** `ntn_3gpp/dataset/with_diffuse/figures/` and
+  `ntn_3gpp/dataset/without_diffuse/figures/`: every CSV the figures and the
+  summary table are made from (per scenario, band, elevation and LoS/NLoS
+  state), and the figures. The `figures/` level is kept because the post
+  scripts take `dataset/<run>` as their `RUNS` argument and read `RUNS/figures/`.
+- **Not in git, raw per-UE results (216 GB):** with diffuse (211 GB) and
+  without (5.1 GB). One `results_elevXXXdeg.pkl` per scenario, band (S: one
+  folder per UE port, V and H) and elevation, each with the per-UE values of
+  10,000 UEs and the full paths of every 50th UE. Available from the authors
+  on request.
+
 ## Install
 
 **Sionna must be patched first.** On a stock `sionna-rt 1.2.1` the pipeline
@@ -171,3 +210,11 @@ the schema is in [docs/pipelines.md](docs/pipelines.md).
 Results also carry a `sionna_patch` provenance record, so a file produced
 without the patches is identifiable afterwards. **Patched and unpatched results
 are not comparable.**
+
+## License
+
+Apache License 2.0, the same license as Sionna RT; see [LICENSE](LICENSE).
+The bundled Sionna RT 1.2.1 sources (`sionna_patch/sionna-1.2.1/` and, on the
+`sionna-ntn-3gpp` branch, `ntn_3gpp/site/sionna/`) are Copyright (c) 2021-2025
+NVIDIA CORPORATION & AFFILIATES and are modified by the patches in
+`sionna_patch/diffs/`.

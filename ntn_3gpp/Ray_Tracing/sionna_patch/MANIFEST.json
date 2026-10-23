@@ -1,0 +1,67 @@
+{
+  "base_wheel": "sionna-rt 1.2.1",
+  "generated": "2026-10-14",
+  "applies_to": "site-packages/sionna/",
+  "note": "Reference copies only -- nothing installs these. Copy by hand, then verify with `python sionna_patch_check.py --check`. sionna/__init__.py is NOT patched: the installed one comes from the `sionna` umbrella package, not from sionna-rt.",
+  "files": [
+    {
+      "path": "sionna/rt/utils/ray_tracing.py",
+      "archived": "sionna-1.2.1/rt/utils/ray_tracing.py",
+      "pristine": "pristine-1.2.1/rt/utils/ray_tracing.py",
+      "diff": "diffs/ray_tracing.patch",
+      "sha256_pristine": "4d4f9aaa18e9e8ffa151bb7b6ca2f5c748fe47114b0bb0b5599e08ee7b86b348",
+      "sha256_pristine_wheel_record": "4d4f9aaa18e9e8ffa151bb7b6ca2f5c748fe47114b0bb0b5599e08ee7b86b348",
+      "sha256_patched": "b073caf067c096ab56e2cb51b957428bc05b1a086c5e62b2e01bdd8b74266ad6",
+      "sha256_installed_now": "b073caf067c096ab56e2cb51b957428bc05b1a086c5e62b2e01bdd8b74266ad6",
+      "patches": [
+        "beamforming",
+        "epsilon_guard",
+        "beam_cone_precision"
+      ],
+      "summary": "Cone ray sampling in spawn_ray_from_sources, from the exact 1-cos(beam_angle) (beam_cone_t_max) rather than a float32 cos that collapses the cone at slant/radius > 4096; occlusion-ray guard in spawn_ray_to capped at MAX_RAY_GUARD_M = 1e-3 (absolute) instead of EPSILON_FLOAT (relative)."
+    },
+    {
+      "path": "sionna/rt/path_solvers/path_solver.py",
+      "archived": "sionna-1.2.1/rt/path_solvers/path_solver.py",
+      "pristine": "pristine-1.2.1/rt/path_solvers/path_solver.py",
+      "diff": "diffs/path_solver.patch",
+      "sha256_pristine": "0b32228bdde831079cfa4478d092d4634e2e994ecae1b5cbd843404bb2d2afe2",
+      "sha256_pristine_wheel_record": "0b32228bdde831079cfa4478d092d4634e2e994ecae1b5cbd843404bb2d2afe2",
+      "sha256_patched": "b3702ba9825e536d006ccef74a5b60c099921a8d696526c00682546ffda3c873",
+      "sha256_installed_now": "b3702ba9825e536d006ccef74a5b60c099921a8d696526c00682546ffda3c873",
+      "patches": [
+        "beamforming"
+      ],
+      "summary": "beamforming/beam_angle kwargs on PathSolver.__call__; routes to the cone candidate generator and forwards beam_angle to the field calculator."
+    },
+    {
+      "path": "sionna/rt/path_solvers/sb_candidate_generator.py",
+      "archived": "sionna-1.2.1/rt/path_solvers/sb_candidate_generator.py",
+      "pristine": "pristine-1.2.1/rt/path_solvers/sb_candidate_generator.py",
+      "diff": "diffs/sb_candidate_generator.patch",
+      "sha256_pristine": "07d84e733169b1497c7ba69d2fcdc69ab7cc88ece0ee8474d9d924432036f93c",
+      "sha256_pristine_wheel_record": "07d84e733169b1497c7ba69d2fcdc69ab7cc88ece0ee8474d9d924432036f93c",
+      "sha256_patched": "50d2617c7e671a414cbbe529e04333e35c881ffa0d6fecfc3e325b1ebbfd11cb",
+      "sha256_installed_now": "50d2617c7e671a414cbbe529e04333e35c881ffa0d6fecfc3e325b1ebbfd11cb",
+      "patches": [
+        "beamforming"
+      ],
+      "summary": "src_orientations/beam_angle threaded through the shoot-and-bounce chain to spawn_ray_from_sources."
+    },
+    {
+      "path": "sionna/rt/path_solvers/field_calculator.py",
+      "archived": "sionna-1.2.1/rt/path_solvers/field_calculator.py",
+      "pristine": "pristine-1.2.1/rt/path_solvers/field_calculator.py",
+      "diff": "diffs/field_calculator.patch",
+      "sha256_pristine": "3cd33576adaab5f3f2589c1aaf9e0860bdd5bc403fbe7a48ddd8a88a2feda6da",
+      "sha256_pristine_wheel_record": "3cd33576adaab5f3f2589c1aaf9e0860bdd5bc403fbe7a48ddd8a88a2feda6da",
+      "sha256_patched": "f0a4f818e76562fffe924c6871057cab83c455254b8cf280faaebe5f4ff711b7",
+      "sha256_installed_now": "f0a4f818e76562fffe924c6871057cab83c455254b8cf280faaebe5f4ff711b7",
+      "patches": [
+        "beamforming",
+        "beam_cone_precision"
+      ],
+      "summary": "Initial ray-tube solid angle is the cone solid angle 2*pi*beam_cone_t_max(beam_angle) (exact 1-cos, shared with the sampler) rather than 4*pi, preserving total transmit power."
+    }
+  ]
+}

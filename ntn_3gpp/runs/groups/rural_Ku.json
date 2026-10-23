@@ -1,0 +1,10 @@
+{
+  "members": [
+    {
+      "name": "rural_Ku",
+      "dir": "@ROOT@/rural_Ku",
+      "config": "@ROOT@/rural_Ku/config.json",
+      "manifest": "@ROOT@/rural_Ku/manifest.pkl"
+    }
+  ]
+}
