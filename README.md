@@ -27,6 +27,8 @@ re-derives the TR 38.811 channel tables (K-factor, delay spread, angle spreads,
 clutter loss, shadow fading, cluster count) and fills the gaps 6G needs (Ku band,
 K at a directional UE antenna, Doppler spread from satellite motion).
 
+**The paper's results use release `v1.0.0` of this branch.**
+
 | Path | What it is |
 |---|---|
 | `ntn_3gpp/sim/`, `ntn_3gpp/run.sh`, `ntn_3gpp/runs/` | the runner, its launcher, and the exact run inputs (configs and scene lists) |
